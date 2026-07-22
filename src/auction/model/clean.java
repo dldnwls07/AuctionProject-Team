@@ -9,6 +9,6 @@ public class clean {
         if (value == null) {
             return "";
         }
-        return value.replace(',', ' ').replace('\n', ' ').replace('\r', ' ');
+        return value.replace(',', ' ').replace('\n', ' ');
     }
 }
