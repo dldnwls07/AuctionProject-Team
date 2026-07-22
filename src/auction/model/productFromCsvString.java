@@ -3,7 +3,7 @@ package auction.model;
 /**
  * CSV 파일의 한 줄(문자열)을 입력받아 Product 객체로 변환해 주는 클래스
  */
-public class fromCsvString {
+public class productFromCsvString {
 
     public static Product parse(String line) {
         if (line == null || line.trim().isEmpty()) {
