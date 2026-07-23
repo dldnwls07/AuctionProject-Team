@@ -50,8 +50,7 @@ public class MyPagePanel extends JPanel {
         headerCard.setBackground(new Color(30, 35, 60)); // 짙은 네이비 톤 헤더
         headerCard.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(220, 220, 230)),
-                new EmptyBorder(20, 25, 20, 25)
-        ));
+                new EmptyBorder(20, 25, 20, 25)));
 
         // 좌측: 프로필 정보
         JPanel leftInfo = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
@@ -101,8 +100,7 @@ public class MyPagePanel extends JPanel {
         box.setBackground(new Color(255, 255, 255, 30)); // 반투명 흰색
         box.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(255, 255, 255, 60)),
-                new EmptyBorder(8, 15, 8, 15)
-        ));
+                new EmptyBorder(8, 15, 8, 15)));
 
         JLabel titleLbl = new JLabel(title);
         titleLbl.setFont(new Font("맑은 고딕", Font.PLAIN, 11));
@@ -137,8 +135,7 @@ public class MyPagePanel extends JPanel {
         section.setBackground(Color.WHITE);
         section.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(230, 230, 230)),
-                new EmptyBorder(12, 15, 12, 15)
-        ));
+                new EmptyBorder(12, 15, 12, 15)));
 
         JLabel titleLbl = new JLabel(sectionTitle);
         titleLbl.setFont(new Font("맑은 고딕", Font.BOLD, 15));
@@ -151,13 +148,14 @@ public class MyPagePanel extends JPanel {
     }
 
     private JScrollPane createRegisteredTable() {
-        String[] columns = {"이미지", "상품명", "시작가", "현재가", "최고 입찰자", "경매 상태", "마감 시간"};
+        String[] columns = { "이미지", "상품명", "시작가", "현재가", "최고 입찰자", "경매 상태", "마감 시간" };
 
         regTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public Class<?> getColumnClass(int columnIndex) {
                 return columnIndex == 0 ? Icon.class : String.class;
             }
+
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -174,13 +172,14 @@ public class MyPagePanel extends JPanel {
     }
 
     private JScrollPane createBidTable() {
-        String[] columns = {"이미지", "상품명", "내 최고 입찰가", "현재 최고가", "나의 상태", "마감 시간"};
+        String[] columns = { "이미지", "상품명", "내 최고 입찰가", "현재 최고가", "나의 상태", "마감 시간" };
 
         bidTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public Class<?> getColumnClass(int columnIndex) {
                 return columnIndex == 0 ? Icon.class : String.class;
             }
+
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -229,9 +228,10 @@ public class MyPagePanel extends JPanel {
         regTableModel.setRowCount(0);
         for (Product p : regProducts) {
             Icon icon = loadThumbnail(p.getImagePath(), dummyIcon);
-            String topBidder = (p.getCurrentBidder() == null || p.getCurrentBidder().isEmpty()) ? "없음" : p.getCurrentBidder();
+            String topBidder = (p.getCurrentBidder() == null || p.getCurrentBidder().isEmpty()) ? "없음"
+                    : p.getCurrentBidder();
 
-            regTableModel.addRow(new Object[]{
+            regTableModel.addRow(new Object[] {
                     icon,
                     p.getTitle(),
                     formatPrice(p.getStartPrice()) + " 원",
@@ -251,7 +251,7 @@ public class MyPagePanel extends JPanel {
             Product p = summary.getProduct();
             Icon icon = loadThumbnail(p.getImagePath(), dummyIcon);
 
-            bidTableModel.addRow(new Object[]{
+            bidTableModel.addRow(new Object[] {
                     icon,
                     p.getTitle(),
                     formatPrice(summary.getMyHighestBid()) + " 원",
