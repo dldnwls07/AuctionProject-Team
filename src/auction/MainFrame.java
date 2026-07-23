@@ -2,16 +2,26 @@ package auction;
 
 import auction.gui.AuctionPanel;
 import auction.gui.ProductRegisterPanel;
+import auction.model.Bidder;
+import auction.model.Product;
+import auction.model.User;
+import auction.service.AuctionService;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.util.ArrayList;
 
 public class MainFrame extends JFrame {
 
     private JPanel mainContentPanel;
     private CardLayout cardLayout;
     private JPanel sidebarPanel; // 사이드바 패널 변수
+
+    private final AuctionService auctionService;
+    private final User currentUser;
+    private AuctionPanel auctionPanel;
+    private JLabel userLabel;
 
     public MainFrame() {
         try {
@@ -20,17 +30,89 @@ public class MainFrame extends JFrame {
             e.printStackTrace();
         }
 
+        auctionService = new AuctionService();
+
+        if (!auctionService.initializeFiles()) {
+            JOptionPane.showMessageDialog(null,
+                    auctionService.getLastErrorMessage(),
+                    "초기화 실패", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+        }
+
+        checkStaleLock();
+
+        currentUser = createCurrentUser();
+
         setTitle("한국공학대학교 교내 경매");
         setSize(1200, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
-        getContentPane().setBackground(new Color(248, 249, 250)); 
+        getContentPane().setBackground(new Color(248, 249, 250));
 
         initHeader();
         initSidebar(); // 사이드바 초기화 메서드 호출
         initMainContent();
         initStatusBar();
+        startAutoRefreshTimer();
+    }
+
+    /**
+     * 이전 실행이 비정상 종료되어 auction.lock이 남아있으면 삭제 여부를 물어본다.
+     */
+    private void checkStaleLock() {
+        if (!auctionService.hasStaleLock()) {
+            return;
+        }
+
+        int choice = JOptionPane.showConfirmDialog(null,
+                "이전 실행에서 남은 잠금 파일(auction.lock)이 있습니다. 삭제하시겠습니까?",
+                "잠금 파일 확인", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+
+        if (choice == JOptionPane.YES_OPTION) {
+            auctionService.clearLock();
+        }
+    }
+
+    /**
+     * 실행 시 사용자 이름을 입력받아 Bidder 객체를 생성한다.
+     * 공백이면 다시 입력받고, 취소하면 프로그램을 종료한다.
+     * 여러 프로세스를 서로 다른 이름으로 띄우면 동시 입찰 잠금(auction.lock) 동작을 테스트할 수 있다.
+     */
+    private User createCurrentUser() {
+        while (true) {
+            String inputName = JOptionPane.showInputDialog(
+                    null, "사용자 이름을 입력해 주세요.", "로그인", JOptionPane.PLAIN_MESSAGE);
+
+            if (inputName == null) {
+                System.exit(0);
+                return null; // System.exit() 이후에는 도달하지 않는다.
+            }
+
+            String userName = inputName.trim();
+            if (!userName.isEmpty()) {
+                return new Bidder(Math.abs(userName.hashCode()) % 100000, userName);
+            }
+        }
+    }
+
+    /**
+     * 1초마다 경매 상태(대기/진행/낙찰/유찰)를 갱신하고 화면을 새로고침한다.
+     */
+    private void startAutoRefreshTimer() {
+        Timer timer = new Timer(1000, e -> {
+            ArrayList<Product> ended = auctionService.updateAuctionStatuses();
+            if (auctionPanel != null) {
+                auctionPanel.refresh();
+            }
+            for (Product product : ended) {
+                String message = Product.STATUS_SOLD.equals(product.getStatus())
+                        ? "[" + product.getTitle() + "] 경매가 낙찰되었습니다. (낙찰자: " + product.getCurrentBidder() + ")"
+                        : "[" + product.getTitle() + "] 경매가 유찰되었습니다.";
+                JOptionPane.showMessageDialog(this, message, "경매 종료", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        timer.start();
     }
 
     private void initHeader() {
@@ -68,7 +150,7 @@ public class MainFrame extends JFrame {
         leftHeaderPanel.add(titleLabel);
 
         // 우측 영역 (사용자 정보 박스)
-        JLabel userLabel = new JLabel("지소은", SwingConstants.CENTER);
+        userLabel = new JLabel(currentUser.getUserName(), SwingConstants.CENTER);
         userLabel.setFont(new Font("맑은 고딕", Font.BOLD, 13));
         userLabel.setForeground(new Color(51, 51, 51));
         userLabel.setBackground(new Color(240, 240, 240));
@@ -142,13 +224,22 @@ public class MainFrame extends JFrame {
     private void initMainContent() {
         cardLayout = new CardLayout();
         mainContentPanel = new JPanel(cardLayout);
-        mainContentPanel.setBorder(new EmptyBorder(20, 20, 20, 20)); 
+        mainContentPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
         mainContentPanel.setOpaque(false);
 
-        mainContentPanel.add(new AuctionPanel(), "AUCTION");
-        mainContentPanel.add(new ProductRegisterPanel(), "REGISTER");
+        auctionPanel = new AuctionPanel(auctionService, currentUser);
+        mainContentPanel.add(auctionPanel, "AUCTION");
+        mainContentPanel.add(new ProductRegisterPanel(this, auctionService, currentUser), "REGISTER");
 
         add(mainContentPanel, BorderLayout.CENTER);
+    }
+
+    /**
+     * 상품 등록 성공 직후 호출되어 경매 참여 탭으로 전환하고 등록된 상품을 선택한다.
+     */
+    public void showAuctionProduct(String productId) {
+        cardLayout.show(mainContentPanel, "AUCTION");
+        auctionPanel.selectProduct(productId);
     }
 
     private void initStatusBar() {

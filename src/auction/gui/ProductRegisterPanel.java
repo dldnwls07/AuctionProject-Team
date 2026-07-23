@@ -1,23 +1,39 @@
 package auction.gui;
 
+import auction.MainFrame;
+import auction.model.Product;
+import auction.model.User;
+import auction.service.AuctionService;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.io.File;
 
 public class ProductRegisterPanel extends JPanel {
 
+    private final MainFrame mainFrame;
+    private final AuctionService auctionService;
+    private final User currentUser;
+
     private JLabel imagePreview;
     private File selectedImageFile;
-    
+
+    private JTextField txtTitle;
+    private JTextArea txtDesc;
+    private JTextField txtPrice;
     private JTextField txtStartTime;
     private JTextField txtEndTime;
 
-    public ProductRegisterPanel() {
+    public ProductRegisterPanel(MainFrame mainFrame, AuctionService auctionService, User currentUser) {
+        this.mainFrame = mainFrame;
+        this.auctionService = auctionService;
+        this.currentUser = currentUser;
+
         setLayout(new BorderLayout(20, 20));
         setOpaque(false);
 
@@ -31,11 +47,11 @@ public class ProductRegisterPanel extends JPanel {
 
         JPanel formContainer = new JPanel(new BorderLayout());
         formContainer.setBackground(Color.WHITE);
-        
+
         // [요구사항 3] 하단(bottom) 여백을 30 -> 60으로 늘려 이미지 버튼 아래 여유 공간 확보
         formContainer.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(230, 230, 230)),
-                new EmptyBorder(30, 30, 60, 30) 
+                new EmptyBorder(30, 30, 60, 30)
         ));
 
         JPanel formPanel = new JPanel(new GridBagLayout());
@@ -47,24 +63,29 @@ public class ProductRegisterPanel extends JPanel {
         Font labelFont = new Font("맑은 고딕", Font.BOLD, 13);
         Color labelColor = new Color(80, 80, 80);
 
-        addFormRow(formPanel, gbc, 0, "판매자", new JLabel("지소은"), labelFont, labelColor);
-        addFormRow(formPanel, gbc, 1, "상품명", createStyledTextField(), labelFont, labelColor);
-        
-        JTextArea txtDesc = new JTextArea(6, 20);
+        addFormRow(formPanel, gbc, 0, "판매자", new JLabel(currentUser.getUserName()), labelFont, labelColor);
+
+        txtTitle = createStyledTextField();
+        addFormRow(formPanel, gbc, 1, "상품명", txtTitle, labelFont, labelColor);
+
+        txtDesc = new JTextArea(6, 20);
+        txtDesc.setLineWrap(true);
+        txtDesc.setWrapStyleWord(true);
         txtDesc.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(200, 200, 200)),
                 new EmptyBorder(8, 8, 8, 8)
         ));
         addFormRow(formPanel, gbc, 2, "상품 설명", new JScrollPane(txtDesc), labelFont, labelColor);
-        
+
         JPanel pricePanel = new JPanel(new BorderLayout(10, 0));
         pricePanel.setOpaque(false);
-        pricePanel.add(createStyledTextField(), BorderLayout.CENTER);
+        txtPrice = createStyledTextField();
+        pricePanel.add(txtPrice, BorderLayout.CENTER);
         JLabel wonLabel = new JLabel("원");
         wonLabel.setFont(labelFont);
         wonLabel.setForeground(labelColor);
         pricePanel.add(wonLabel, BorderLayout.EAST);
-        
+
         addFormRow(formPanel, gbc, 3, "시작 가격", pricePanel, labelFont, labelColor);
 
         txtStartTime = createStyledTextField();
@@ -78,7 +99,7 @@ public class ProductRegisterPanel extends JPanel {
         imgBtn.setFocusPainted(false);
         imgBtn.setOpaque(true);
         imgBtn.setBorderPainted(false);
-        
+
         imagePreview = new JLabel("이미지를 선택해 주세요", SwingConstants.CENTER);
         imagePreview.setOpaque(true);
         imagePreview.setBackground(new Color(248, 249, 250));
@@ -96,7 +117,7 @@ public class ProductRegisterPanel extends JPanel {
                 ImageIcon icon = new ImageIcon(selectedImageFile.getAbsolutePath());
                 Image scaledImage = icon.getImage().getScaledInstance(350, 350, Image.SCALE_SMOOTH);
                 imagePreview.setIcon(new ImageIcon(scaledImage));
-                imagePreview.setText(""); 
+                imagePreview.setText("");
             }
         });
 
@@ -113,20 +134,20 @@ public class ProductRegisterPanel extends JPanel {
     private JPanel createDateTimeSelectorPanel(JTextField targetField) {
         JPanel panel = new JPanel(new BorderLayout(8, 0));
         panel.setOpaque(false);
-        
+
         targetField.setEditable(false);
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
         targetField.setText(sdf.format(new Date()));
-        
+
         panel.add(targetField, BorderLayout.CENTER);
-        
+
         JButton selectBtn = new JButton("날짜 선택");
         selectBtn.setBackground(new Color(240, 240, 240));
         selectBtn.setFocusPainted(false);
         selectBtn.setOpaque(true);
         selectBtn.setBorderPainted(false);
         selectBtn.setFont(new Font("맑은 고딕", Font.BOLD, 12));
-        
+
         selectBtn.addActionListener(e -> {
             DateTimePickerDialog dialog = new DateTimePickerDialog((Frame) SwingUtilities.getWindowAncestor(this));
             dialog.setVisible(true);
@@ -135,7 +156,7 @@ public class ProductRegisterPanel extends JPanel {
                 targetField.setText(sdfModal.format(dialog.getSelectedDate()));
             }
         });
-        
+
         panel.add(selectBtn, BorderLayout.EAST);
         return panel;
     }
@@ -146,7 +167,7 @@ public class ProductRegisterPanel extends JPanel {
         private Calendar viewCalendar = Calendar.getInstance();
         private JLabel lblMonthYear = new JLabel("", JLabel.CENTER);
         private JPanel dayGridPanel;
-        
+
         private JButton btnAmPm;
         private JSpinner hourSpinner;
         private JSpinner minuteSpinner;
@@ -261,7 +282,7 @@ public class ProductRegisterPanel extends JPanel {
             timeSelectPanel.add(hourSpinner);
             timeSelectPanel.add(colonLabel);
             timeSelectPanel.add(minuteSpinner);
-            
+
             JLabel minLabel = new JLabel("분");
             minLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 12));
             timeSelectPanel.add(minLabel);
@@ -334,7 +355,7 @@ public class ProductRegisterPanel extends JPanel {
             Calendar cal = (Calendar) viewCalendar.clone();
             cal.set(Calendar.DAY_OF_MONTH, 1);
 
-            int startDayOfWeek = cal.get(Calendar.DAY_OF_WEEK); 
+            int startDayOfWeek = cal.get(Calendar.DAY_OF_WEEK);
             int maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
 
             int offset = startDayOfWeek - 1;
@@ -393,15 +414,15 @@ public class ProductRegisterPanel extends JPanel {
     private JPanel createBottomPanel() {
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
         bottomPanel.setOpaque(false);
-        
+
         JButton cancelBtn = new JButton("취소");
         cancelBtn.setPreferredSize(new Dimension(100, 40));
         cancelBtn.setBackground(new Color(240, 240, 240));
         cancelBtn.setOpaque(true);
         cancelBtn.setBorderPainted(false);
         cancelBtn.setFocusPainted(false);
-        cancelBtn.addActionListener(e -> JOptionPane.showMessageDialog(this, "등록이 취소되었습니다."));
-        
+        cancelBtn.addActionListener(e -> resetForm());
+
         JButton submitBtn = new JButton("상품 등록");
         submitBtn.setPreferredSize(new Dimension(120, 40));
         submitBtn.setBackground(new Color(0, 122, 255));
@@ -409,22 +430,59 @@ public class ProductRegisterPanel extends JPanel {
         submitBtn.setFocusPainted(false);
         submitBtn.setOpaque(true);
         submitBtn.setBorderPainted(false);
-        submitBtn.addActionListener(e -> JOptionPane.showMessageDialog(this, "상품이 성공적으로 등록되었습니다!", "등록 완료", JOptionPane.INFORMATION_MESSAGE));
+        submitBtn.addActionListener(e -> submitProduct());
 
         bottomPanel.add(cancelBtn);
         bottomPanel.add(submitBtn);
         return bottomPanel;
     }
 
+    private void submitProduct() {
+        Product product = auctionService.registerProduct(
+                currentUser,
+                txtTitle.getText(),
+                txtDesc.getText(),
+                txtPrice.getText(),
+                txtStartTime.getText(),
+                txtEndTime.getText(),
+                selectedImageFile
+        );
+
+        if (product == null) {
+            JOptionPane.showMessageDialog(this,
+                    auctionService.getLastErrorMessage(),
+                    "등록 실패", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        JOptionPane.showMessageDialog(this,
+                "상품이 성공적으로 등록되었습니다! (상품 번호: " + product.getProductId() + ")",
+                "등록 완료", JOptionPane.INFORMATION_MESSAGE);
+        resetForm();
+        mainFrame.showAuctionProduct(product.getProductId());
+    }
+
+    private void resetForm() {
+        txtTitle.setText("");
+        txtDesc.setText("");
+        txtPrice.setText("");
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        txtStartTime.setText(sdf.format(new Date()));
+        txtEndTime.setText(sdf.format(new Date()));
+        selectedImageFile = null;
+        imagePreview.setIcon(null);
+        imagePreview.setText("이미지를 선택해 주세요");
+    }
+
     private void addFormRow(JPanel panel, GridBagConstraints gbc, int y, String labelText, Component comp, Font font, Color color) {
         gbc.gridx = 0; gbc.gridy = y; gbc.weightx = 0.1;
         gbc.anchor = (comp instanceof JScrollPane) ? GridBagConstraints.NORTH : GridBagConstraints.CENTER;
-        
+
         JLabel label = new JLabel(labelText);
         label.setFont(font);
         label.setForeground(color);
         panel.add(label, gbc);
-        
+
         gbc.gridx = 1; gbc.weightx = 0.9;
         panel.add(comp, gbc);
     }
