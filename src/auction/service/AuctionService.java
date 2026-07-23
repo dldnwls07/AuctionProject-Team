@@ -6,6 +6,7 @@ package auction.service;
 
 import auction.file.DataManager;
 import auction.model.Bid;
+import auction.model.MyBidSummary;
 import auction.model.Product;
 import auction.model.Seller;
 import auction.model.User;
@@ -763,6 +764,85 @@ public class AuctionService {
     private void copyDataError() {
         lastErrorMessage =
                 dataManager.getLastErrorMessage();
+    }
+
+    /**
+     * 특정 사용자가 등록한 상품 목록을 반환한다.
+     */
+    public ArrayList<Product> getMyRegisteredProducts(User currentUser) {
+        ArrayList<Product> result = new ArrayList<>();
+        if (currentUser == null || currentUser.getUserName() == null) {
+            return result;
+        }
+
+        ArrayList<Product> allProducts = dataManager.getProducts();
+        for (Product p : allProducts) {
+            if (currentUser.getUserName().equals(p.getSellerName())) {
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 특정 사용자가 입찰에 참여한 상품 목록과 해당 사용자의 입찰 상태를 반환한다.
+     */
+    public ArrayList<MyBidSummary> getMyBidSummaryList(User currentUser) {
+        ArrayList<MyBidSummary> result = new ArrayList<>();
+        if (currentUser == null || currentUser.getUserName() == null) {
+            return result;
+        }
+
+        String userName = currentUser.getUserName();
+        ArrayList<Bid> allBids = dataManager.getBids();
+
+        // 1. 해당 사용자가 입찰한 상품 ID와 내 최고 입찰액 수집
+        java.util.Map<String, Integer> myHighestBids = new java.util.LinkedHashMap<>();
+        for (Bid bid : allBids) {
+            if (userName.equals(bid.getBidderName())) {
+                String pId = bid.getProductId();
+                int price = bid.getBidPrice();
+                if (!myHighestBids.containsKey(pId) || price > myHighestBids.get(pId)) {
+                    myHighestBids.put(pId, price);
+                }
+            }
+        }
+
+        // 2. 각 상품별 상태 및 내 상태 판정
+        for (java.util.Map.Entry<String, Integer> entry : myHighestBids.entrySet()) {
+            String productId = entry.getKey();
+            int myMaxBid = entry.getValue();
+
+            Product product = dataManager.findProduct(productId);
+            if (product == null) {
+                continue;
+            }
+
+            String myStatus;
+            String productStatus = product.getStatus();
+
+            if (Product.STATUS_SOLD.equals(productStatus)) {
+                if (userName.equals(product.getCurrentBidder())) {
+                    myStatus = "🎉 최종 낙찰";
+                } else {
+                    myStatus = "❌ 낙찰 실패";
+                }
+            } else if (Product.STATUS_NO_BID.equals(productStatus)) {
+                myStatus = "⚪ 유찰";
+            } else if (Product.STATUS_OPEN.equals(productStatus)) {
+                if (userName.equals(product.getCurrentBidder())) {
+                    myStatus = "🔥 내가 1등 유지중";
+                } else {
+                    myStatus = "⚡ 최고가 갱신당함";
+                }
+            } else { // STATUS_WAITING
+                myStatus = "대기 중";
+            }
+
+            result.add(new MyBidSummary(product, myMaxBid, myStatus));
+        }
+
+        return result;
     }
 
     /**

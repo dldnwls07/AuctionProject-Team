@@ -1,6 +1,7 @@
 package auction;
 
 import auction.gui.AuctionPanel;
+import auction.gui.MyPagePanel;
 import auction.gui.ProductRegisterPanel;
 import auction.model.Bidder;
 import auction.model.Product;
@@ -21,6 +22,7 @@ public class MainFrame extends JFrame {
     private final AuctionService auctionService;
     private final User currentUser;
     private AuctionPanel auctionPanel;
+    private MyPagePanel myPagePanel;
     private JLabel userLabel;
 
     public MainFrame() {
@@ -105,6 +107,9 @@ public class MainFrame extends JFrame {
             if (auctionPanel != null) {
                 auctionPanel.refresh();
             }
+            if (myPagePanel != null) {
+                myPagePanel.refresh();
+            }
             for (Product product : ended) {
                 String message = Product.STATUS_SOLD.equals(product.getStatus())
                         ? "[" + product.getTitle() + "] 경매가 낙찰되었습니다. (낙찰자: " + product.getCurrentBidder() + ")"
@@ -183,14 +188,23 @@ public class MainFrame extends JFrame {
 
         JButton btnAuction = createSidebarButton("경매 참여");
         JButton btnRegister = createSidebarButton("상품 등록");
+        JButton btnMyPage = createSidebarButton("마이페이지");
 
         btnAuction.addActionListener(e -> cardLayout.show(mainContentPanel, "AUCTION"));
         btnRegister.addActionListener(e -> cardLayout.show(mainContentPanel, "REGISTER"));
+        btnMyPage.addActionListener(e -> {
+            cardLayout.show(mainContentPanel, "MYPAGE");
+            if (myPagePanel != null) {
+                myPagePanel.refresh();
+            }
+        });
 
         // 세로 정렬을 위해 버튼 추가 후 약간의 간격(RigidArea) 삽입
         sidebarPanel.add(btnAuction);
         sidebarPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         sidebarPanel.add(btnRegister);
+        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        sidebarPanel.add(btnMyPage);
 
         add(sidebarPanel, BorderLayout.WEST);
     }
@@ -228,8 +242,11 @@ public class MainFrame extends JFrame {
         mainContentPanel.setOpaque(false);
 
         auctionPanel = new AuctionPanel(auctionService, currentUser);
+        myPagePanel = new MyPagePanel(auctionService, currentUser);
+
         mainContentPanel.add(auctionPanel, "AUCTION");
         mainContentPanel.add(new ProductRegisterPanel(this, auctionService, currentUser), "REGISTER");
+        mainContentPanel.add(myPagePanel, "MYPAGE");
 
         add(mainContentPanel, BorderLayout.CENTER);
     }
