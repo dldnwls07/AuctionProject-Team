@@ -13,38 +13,40 @@ import auction.model.User;
 import java.io.File;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 /**
- * 상품 등록, 입찰 검증, 경매 상태 변경,
- * 잠금 파일 관리를 담당하는 서비스 클래스다.
+ * 상품 등록, 입찰 검증, 경매 상태 변경을 담당하는 서비스 클래스다.
+ * 잠금 파일 제어는 LockManager, 입력값 파싱은 InputParser에 위임한다.
  */
 public class AuctionService {
 
-    /**
-     * CSV에 저장할 때 사용하는 시간 형식이다.
-     */
-    public static final DateTimeFormatter TIME_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    /**
-     * 새 ProductRegisterPanel이 사용하는 시간 형식이다.
-     */
-    private static final DateTimeFormatter MINUTE_TIME_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
     private final DataManager dataManager;
-    private final File lockFile;
+    private final LockManager lockManager;
     private String lastErrorMessage;
 
     /**
-     * 데이터 관리자와 잠금 파일을 준비한다.
+     * 데이터 관리자와 잠금 관리자를 준비한다.
      */
     public AuctionService() {
         dataManager = new DataManager();
-        lockFile = new File("data/auction.lock");
+        lockManager = new LockManager(new File("data/auction.lock"));
         lastErrorMessage = "";
+    }
+
+    /**
+     * 이전 실행이 비정상 종료되어 auction.lock이 남아있는지 확인한다.
+     * MainFrame이 시작 시 호출해서 사용자에게 삭제 여부를 물어볼 수 있다.
+     */
+    public boolean hasStaleLock() {
+        return lockManager.exists();
+    }
+
+    /**
+     * 남아있는 auction.lock 파일을 강제로 삭제한다.
+     */
+    public void clearLock() {
+        lockManager.release();
     }
 
     /**
@@ -80,16 +82,16 @@ public class AuctionService {
             return null;
         }
 
-        String cleanTitle = cleanText(title);
-        String cleanDescription = cleanText(description);
+        String cleanTitle = InputParser.cleanText(title);
+        String cleanDescription = InputParser.cleanText(description);
 
-        int startPrice = parsePrice(priceText);
+        int startPrice = InputParser.parsePrice(priceText);
 
         LocalDateTime startTime =
-                parseDateTime(auctionStartTime);
+                InputParser.parseDateTime(auctionStartTime);
 
         LocalDateTime endTime =
-                parseDateTime(auctionEndTime);
+                InputParser.parseDateTime(auctionEndTime);
 
         if (cleanTitle.isEmpty()) {
             lastErrorMessage =
@@ -133,7 +135,8 @@ public class AuctionService {
             return null;
         }
 
-        if (!createLock()) {
+        if (!lockManager.acquire()) {
+            lastErrorMessage = lockManager.getLastErrorMessage();
             return null;
         }
 
@@ -147,22 +150,18 @@ public class AuctionService {
             }
 
             /*
-             * DataManager의 기존 nextProductId()는 int를 반환한다.
-             * 새 Product의 productId는 String이므로 문자열로 변환한다.
+             * DataManager.nextProductId()는 String을 반환한다.
              */
-            int numericProductId =
-                    dataManager.nextProductId();
-
             String productId =
-                    String.valueOf(numericProductId);
+                    dataManager.nextProductId();
 
             String imagePath =
                     dataManager.copyImage(
                             imageFile,
-                            numericProductId
+                            productId
                     );
 
-            if (imagePath == null) {
+            if (imagePath == null || imagePath.isEmpty()) {
                 copyDataError();
                 return null;
             }
@@ -194,8 +193,8 @@ public class AuctionService {
                     startPrice,
                     "",
                     imagePath,
-                    startTime.format(TIME_FORMAT),
-                    endTime.format(TIME_FORMAT),
+                    startTime.format(InputParser.TIME_FORMAT),
+                    endTime.format(InputParser.TIME_FORMAT),
                     "",
                     status
             );
@@ -211,7 +210,7 @@ public class AuctionService {
             return product;
 
         } finally {
-            deleteLock();
+            lockManager.release();
         }
     }
 
@@ -235,7 +234,7 @@ public class AuctionService {
             return null;
         }
 
-        int bidPrice = parsePrice(priceText);
+        int bidPrice = InputParser.parsePrice(priceText);
 
         if (bidPrice <= 0) {
             lastErrorMessage =
@@ -243,7 +242,8 @@ public class AuctionService {
             return null;
         }
 
-        if (!createLock()) {
+        if (!lockManager.acquire()) {
+            lastErrorMessage = lockManager.getLastErrorMessage();
             return null;
         }
 
@@ -273,7 +273,7 @@ public class AuctionService {
                 return null;
             }
 
-            String now = getCurrentTime();
+            String now = InputParser.getCurrentTime();
 
             /*
              * Product의 현재 최고 입찰 정보를 변경한다.
@@ -286,11 +286,11 @@ public class AuctionService {
             product.setStatus(Product.STATUS_OPEN);
 
             /*
-             * Bid의 productId는 현재 int 자료형이다.
+             * Bid의 productId는 String 자료형이므로 변환해서 전달한다.
              */
             Bid bid = new Bid(
                     dataManager.nextBidId(),
-                    productId,
+                    String.valueOf(productId),
                     currentUser.getUserName(),
                     bidPrice,
                     now
@@ -318,7 +318,7 @@ public class AuctionService {
             return product;
 
         } finally {
-            deleteLock();
+            lockManager.release();
         }
     }
 
@@ -334,7 +334,7 @@ public class AuctionService {
             String priceText) {
 
         int numericProductId =
-                parseProductId(productId);
+                InputParser.parseProductId(productId);
 
         if (numericProductId < 1) {
             lastErrorMessage =
@@ -364,12 +364,12 @@ public class AuctionService {
         }
 
         LocalDateTime startTime =
-                parseDateTime(
+                InputParser.parseDateTime(
                         product.getAuctionStartTime()
                 );
 
         LocalDateTime endTime =
-                parseDateTime(
+                InputParser.parseDateTime(
                         product.getAuctionEndTime()
                 );
 
@@ -475,7 +475,7 @@ public class AuctionService {
      */
     public Product loadProduct(String productId) {
         int numericProductId =
-                parseProductId(productId);
+                InputParser.parseProductId(productId);
 
         if (numericProductId < 1) {
             lastErrorMessage =
@@ -504,7 +504,7 @@ public class AuctionService {
      */
     public ArrayList<Bid> loadBids(String productId) {
         int numericProductId =
-                parseProductId(productId);
+                InputParser.parseProductId(productId);
 
         if (numericProductId < 1) {
             lastErrorMessage =
@@ -554,7 +554,7 @@ public class AuctionService {
          * Timer는 1초마다 실행되므로 잠금을 얻지 못해도
          * 별도의 오류 메시지를 만들지 않고 다음 실행을 기다린다.
          */
-        if (!createLockWithoutMessage()) {
+        if (!lockManager.acquireQuietly()) {
             return endedProducts;
         }
 
@@ -602,7 +602,7 @@ public class AuctionService {
             return endedProducts;
 
         } finally {
-            deleteLock();
+            lockManager.release();
         }
     }
 
@@ -627,12 +627,12 @@ public class AuctionService {
         }
 
         LocalDateTime startTime =
-                parseDateTime(
+                InputParser.parseDateTime(
                         product.getAuctionStartTime()
                 );
 
         LocalDateTime endTime =
-                parseDateTime(
+                InputParser.parseDateTime(
                         product.getAuctionEndTime()
                 );
 
@@ -651,12 +651,8 @@ public class AuctionService {
             return Product.STATUS_OPEN;
         }
 
-        /*
-         * 새 Product의 getter 이름이
-         * getcurrentBidder()로 작성되어 있으므로 그대로 사용한다.
-         */
         String currentBidder =
-                product.getcurrentBidder();
+                product.getCurrentBidder();
 
         if (currentBidder == null
                 || currentBidder.trim().isEmpty()) {
@@ -672,7 +668,7 @@ public class AuctionService {
      */
     private void finishProduct(Product product) {
         String currentBidder =
-                product.getcurrentBidder();
+                product.getCurrentBidder();
 
         if (currentBidder == null
                 || currentBidder.trim().isEmpty()) {
@@ -714,7 +710,7 @@ public class AuctionService {
                 product.getStatus())) {
 
             targetTime =
-                    parseDateTime(
+                    InputParser.parseDateTime(
                             product.getAuctionStartTime()
                     );
 
@@ -722,7 +718,7 @@ public class AuctionService {
 
         } else {
             targetTime =
-                    parseDateTime(
+                    InputParser.parseDateTime(
                             product.getAuctionEndTime()
                     );
 
@@ -759,151 +755,6 @@ public class AuctionService {
                 + hours + "시간 "
                 + minutes + "분 "
                 + seconds + "초";
-    }
-
-    /**
-     * 상품 번호 문자열을 정수로 변환한다.
-     */
-    private int parseProductId(String productId) {
-        if (productId == null) {
-            return -1;
-        }
-
-        try {
-            return Integer.parseInt(
-                    productId.trim()
-            );
-
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    /**
-     * 가격 문자열을 정수로 변환한다.
-     */
-    private int parsePrice(String text) {
-        if (text == null) {
-            return -1;
-        }
-
-        try {
-            return Integer.parseInt(
-                    text.trim().replace(",", "")
-            );
-
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    /**
-     * 시간 문자열을 LocalDateTime으로 변환한다.
-     *
-     * 다음 두 형식을 모두 지원한다.
-     *
-     * yyyy-MM-dd HH:mm:ss
-     * yyyy-MM-dd HH:mm
-     */
-    private LocalDateTime parseDateTime(
-            String text) {
-
-        if (text == null
-                || text.trim().isEmpty()) {
-
-            return null;
-        }
-
-        String value = text.trim();
-
-        try {
-            return LocalDateTime.parse(
-                    value,
-                    TIME_FORMAT
-            );
-
-        } catch (Exception e) {
-            /*
-             * 초가 없는 새 GUI 시간 형식으로 다시 시도한다.
-             */
-        }
-
-        try {
-            return LocalDateTime.parse(
-                    value,
-                    MINUTE_TIME_FORMAT
-            );
-
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * CSV 저장에 문제가 될 수 있는 문자를 정리한다.
-     */
-    private String cleanText(String text) {
-        if (text == null) {
-            return "";
-        }
-
-        return text.trim()
-                .replace(',', ' ')
-                .replace('\n', ' ')
-                .replace('\r', ' ');
-    }
-
-    /**
-     * 현재 시간을 초 단위 문자열로 반환한다.
-     */
-    private String getCurrentTime() {
-        return LocalDateTime.now().format(
-                TIME_FORMAT
-        );
-    }
-
-    /**
-     * auction.lock 파일을 생성한다.
-     */
-    private boolean createLock() {
-        try {
-            if (lockFile.createNewFile()) {
-                return true;
-            }
-
-            lastErrorMessage =
-                    "다른 사용자가 처리 중입니다. "
-                            + "잠시 후 다시 시도해 주세요.";
-
-            return false;
-
-        } catch (Exception e) {
-            lastErrorMessage =
-                    "잠금 파일을 만들지 못했습니다.";
-
-            return false;
-        }
-    }
-
-    /**
-     * 자동 상태 갱신에서 조용히 잠금을 시도한다.
-     */
-    private boolean createLockWithoutMessage() {
-        try {
-            return lockFile.createNewFile();
-
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * 작업이 끝나면 잠금 파일을 삭제한다.
-     */
-    private void deleteLock() {
-        if (lockFile.exists()) {
-            lockFile.delete();
-        }
     }
 
     /**
