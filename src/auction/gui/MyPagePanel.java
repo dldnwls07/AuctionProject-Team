@@ -14,6 +14,7 @@ import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MyPagePanel extends JPanel {
@@ -31,6 +32,10 @@ public class MyPagePanel extends JPanel {
     private DefaultTableModel bidTableModel;
 
     private final Map<String, Icon> thumbnailCache = new HashMap<>();
+
+    // 각 표에 현재 그려져 있는 상품 ID 순서. 매 초 갱신 때 전체 재구축이 필요한지 판단한다.
+    private final List<String> regRenderedIds = new ArrayList<>();
+    private final List<String> bidRenderedIds = new ArrayList<>();
 
     public MyPagePanel(AuctionService auctionService, User currentUser) {
         this.auctionService = auctionService;
@@ -225,13 +230,15 @@ public class MyPagePanel extends JPanel {
         ArrayList<Product> regProducts = auctionService.getMyRegisteredProducts(currentUser);
         lblRegCount.setText(regProducts.size() + "개");
 
-        regTableModel.setRowCount(0);
+        List<String> regIds = new ArrayList<>();
+        List<Object[]> regRows = new ArrayList<>();
         for (Product p : regProducts) {
             Icon icon = loadThumbnail(p.getImagePath(), dummyIcon);
             String topBidder = (p.getCurrentBidder() == null || p.getCurrentBidder().isEmpty()) ? "없음"
                     : p.getCurrentBidder();
 
-            regTableModel.addRow(new Object[] {
+            regIds.add(p.getProductId());
+            regRows.add(new Object[] {
                     icon,
                     p.getTitle(),
                     formatPrice(p.getStartPrice()) + " 원",
@@ -241,17 +248,20 @@ public class MyPagePanel extends JPanel {
                     p.getAuctionEndTime()
             });
         }
+        syncTable(regTable, regTableModel, regRenderedIds, regIds, regRows);
 
         // 2. 나의 입찰 참여 내역 및 결과 갱신
         ArrayList<MyBidSummary> bidSummaries = auctionService.getMyBidSummaryList(currentUser);
         lblBidCount.setText(bidSummaries.size() + "개");
 
-        bidTableModel.setRowCount(0);
+        List<String> bidIds = new ArrayList<>();
+        List<Object[]> bidRows = new ArrayList<>();
         for (MyBidSummary summary : bidSummaries) {
             Product p = summary.getProduct();
             Icon icon = loadThumbnail(p.getImagePath(), dummyIcon);
 
-            bidTableModel.addRow(new Object[] {
+            bidIds.add(p.getProductId());
+            bidRows.add(new Object[] {
                     icon,
                     p.getTitle(),
                     formatPrice(summary.getMyHighestBid()) + " 원",
@@ -259,6 +269,57 @@ public class MyPagePanel extends JPanel {
                     summary.getMyStatus(),
                     p.getAuctionEndTime()
             });
+        }
+        syncTable(bidTable, bidTableModel, bidRenderedIds, bidIds, bidRows);
+    }
+
+    /**
+     * 표를 최신 데이터에 맞춘다.
+     *
+     * 목록에 담긴 상품과 순서가 그대로면 값이 바뀐 셀만 갱신한다. setRowCount(0)으로 매 초 전부
+     * 지웠다 다시 채우면 선택한 행과 스크롤 위치가 계속 초기화되기 때문이다.
+     * 상품이 실제로 추가/삭제된 경우에만 재구축하며, 이때도 선택 행과 스크롤 위치를 되살린다.
+     */
+    private void syncTable(JTable table, DefaultTableModel model,
+            List<String> renderedIds, List<String> newIds, List<Object[]> newRows) {
+
+        if (renderedIds.equals(newIds) && model.getRowCount() == newRows.size()) {
+            for (int row = 0; row < newRows.size(); row++) {
+                Object[] values = newRows.get(row);
+                for (int col = 0; col < values.length; col++) {
+                    Object current = model.getValueAt(row, col);
+                    if (current == null ? values[col] != null : !current.equals(values[col])) {
+                        model.setValueAt(values[col], row, col);
+                    }
+                }
+            }
+            return;
+        }
+
+        int selectedRow = table.getSelectedRow();
+        String selectedId = (selectedRow >= 0 && selectedRow < renderedIds.size())
+                ? renderedIds.get(selectedRow)
+                : null;
+
+        JViewport viewport = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, table);
+        Point viewPosition = (viewport != null) ? viewport.getViewPosition() : null;
+
+        model.setRowCount(0);
+        for (Object[] values : newRows) {
+            model.addRow(values);
+        }
+
+        renderedIds.clear();
+        renderedIds.addAll(newIds);
+
+        int restoreRow = (selectedId != null) ? newIds.indexOf(selectedId) : -1;
+        if (restoreRow >= 0) {
+            table.setRowSelectionInterval(restoreRow, restoreRow);
+        }
+
+        if (viewport != null && viewPosition != null) {
+            // 행 추가 직후에는 표의 크기가 아직 갱신되지 않아 위치가 잘리므로 레이아웃 이후로 미룬다.
+            SwingUtilities.invokeLater(() -> viewport.setViewPosition(viewPosition));
         }
     }
 

@@ -110,14 +110,29 @@ public class MainFrame extends JFrame {
             if (myPagePanel != null) {
                 myPagePanel.refresh();
             }
-            for (Product product : ended) {
-                String message = Product.STATUS_SOLD.equals(product.getStatus())
-                        ? "[" + product.getTitle() + "] 경매가 낙찰되었습니다. (낙찰자: " + product.getCurrentBidder() + ")"
-                        : "[" + product.getTitle() + "] 경매가 유찰되었습니다.";
-                JOptionPane.showMessageDialog(this, message, "경매 종료", JOptionPane.INFORMATION_MESSAGE);
+            if (!ended.isEmpty()) {
+                showAuctionEndedNotice(ended);
             }
         });
         timer.start();
+    }
+
+    /**
+     * 종료된 경매를 한 번의 알림으로 묶어 보여준다.
+     * 상품마다 다이얼로그를 띄우면 여러 건이 동시에 끝났을 때 그 수만큼 확인을 눌러야 한다.
+     */
+    private void showAuctionEndedNotice(ArrayList<Product> ended) {
+        StringBuilder message = new StringBuilder();
+        for (Product product : ended) {
+            if (message.length() > 0) {
+                message.append(System.lineSeparator());
+            }
+            message.append(Product.STATUS_SOLD.equals(product.getStatus())
+                    ? "[" + product.getTitle() + "] 경매가 낙찰되었습니다. (낙찰자: " + product.getCurrentBidder() + ")"
+                    : "[" + product.getTitle() + "] 경매가 유찰되었습니다.");
+        }
+
+        JOptionPane.showMessageDialog(this, message.toString(), "경매 종료", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void initHeader() {

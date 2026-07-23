@@ -42,6 +42,9 @@ public class AuctionPanel extends JPanel {
     private final Map<String, Icon> thumbnailCache = new HashMap<>();
     private String lastDetailImagePath;
 
+    // refresh()가 유발한 선택 변경에 onRowSelectionChanged()가 반응하지 않도록 막는다.
+    private boolean refreshing;
+
     public AuctionPanel(AuctionService auctionService, User currentUser) {
         this.auctionService = auctionService;
         this.currentUser = currentUser;
@@ -55,7 +58,10 @@ public class AuctionPanel extends JPanel {
         splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(leftPanel);
 
-        splitPane.setRightComponent(null);
+        // 상세 패널은 숨기기만 하고 컴포넌트 트리에서 제거하지 않는다.
+        // setRightComponent(null)로 제거하면 입찰 금액 입력 중이던 포커스까지 함께 사라진다.
+        splitPane.setRightComponent(rightPanel);
+        rightPanel.setVisible(false);
 
         splitPane.setDividerSize(0);
         splitPane.setBorder(null);
@@ -272,22 +278,42 @@ public class AuctionPanel extends JPanel {
     }
 
     private void onRowSelectionChanged() {
+        // refresh() 중에는 선택이 잠시 해제됐다가 곧바로 복원되므로 중간 상태에 반응하지 않는다.
+        if (refreshing) {
+            return;
+        }
+
         int selectedRow = table.getSelectedRow();
 
         if (selectedRow != -1 && selectedRow < displayedProducts.size()) {
-            if (splitPane.getRightComponent() == null) {
-                splitPane.setRightComponent(rightPanel);
-                splitPane.setDividerSize(10);
-            }
-            splitPane.setDividerLocation(splitPane.getWidth() / 2);
-
             selectedProduct = displayedProducts.get(selectedRow);
+            showDetailPanel();
             updateDetailPanel(selectedProduct);
         } else {
             selectedProduct = null;
-            splitPane.setRightComponent(null);
-            splitPane.setDividerSize(0);
+            hideDetailPanel();
         }
+    }
+
+    /**
+     * 상세 패널을 보이게 한다. 이미 보이는 중이면 아무것도 하지 않으므로
+     * 사용자가 옮겨 놓은 분할선 위치가 매 초 가운데로 되돌아가지 않는다.
+     */
+    private void showDetailPanel() {
+        if (rightPanel.isVisible()) {
+            return;
+        }
+        rightPanel.setVisible(true);
+        splitPane.setDividerSize(10);
+        splitPane.setDividerLocation(splitPane.getWidth() / 2);
+    }
+
+    private void hideDetailPanel() {
+        if (!rightPanel.isVisible()) {
+            return;
+        }
+        rightPanel.setVisible(false);
+        splitPane.setDividerSize(0);
     }
 
     private void updateDetailPanel(Product product) {
@@ -349,6 +375,12 @@ public class AuctionPanel extends JPanel {
     public void refresh() {
         String previousSelectedId = (selectedProduct != null) ? selectedProduct.getProductId() : null;
 
+        // 갱신 전 테이블에 그려져 있던 상품 순서. 재구축이 필요한지 판단하는 기준이 된다.
+        List<String> previousIds = new ArrayList<>();
+        for (Product p : displayedProducts) {
+            previousIds.add(p.getProductId());
+        }
+
         ArrayList<Product> all = auctionService.loadProducts();
         String filter = (String) statusCombo.getSelectedItem();
 
@@ -359,32 +391,94 @@ public class AuctionPanel extends JPanel {
             }
         }
 
+        refreshing = true;
+        try {
+            if (isSameRowSequence(previousIds)) {
+                updateRowValues();
+            } else {
+                rebuildRows();
+            }
+
+            int restoreRow = indexOfProduct(previousSelectedId);
+            selectedProduct = (restoreRow >= 0) ? displayedProducts.get(restoreRow) : null;
+
+            if (restoreRow >= 0) {
+                if (table.getSelectedRow() != restoreRow) {
+                    table.setRowSelectionInterval(restoreRow, restoreRow);
+                }
+            } else {
+                table.clearSelection();
+            }
+        } finally {
+            refreshing = false;
+        }
+
+        if (selectedProduct != null) {
+            showDetailPanel();
+            updateDetailPanel(selectedProduct);
+        } else {
+            hideDetailPanel();
+        }
+    }
+
+    /**
+     * 테이블에 그려진 상품이 그대로인지 확인한다.
+     * 같다면 행을 지우지 않고 셀 값만 갱신할 수 있어 선택과 입력 포커스가 유지된다.
+     */
+    private boolean isSameRowSequence(List<String> previousIds) {
+        if (previousIds.size() != displayedProducts.size() || previousIds.size() != tableModel.getRowCount()) {
+            return false;
+        }
+        for (int i = 0; i < previousIds.size(); i++) {
+            if (!previousIds.get(i).equals(displayedProducts.get(i).getProductId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 행 구성이 같을 때 쓰는 경로. setValueAt은 셀 갱신 이벤트만 발생시키므로
+     * 선택이 해제되지 않고, 따라서 입찰 금액 입력 포커스도 그대로 남는다.
+     */
+    private void updateRowValues() {
+        Icon dummyIcon = UIManager.getIcon("FileView.fileIcon");
+        for (int i = 0; i < displayedProducts.size(); i++) {
+            Product p = displayedProducts.get(i);
+            setCellIfChanged(i, 0, loadThumbnail(p.getImagePath(), dummyIcon));
+            setCellIfChanged(i, 1, p.getTitle());
+            setCellIfChanged(i, 2, formatPrice(p.getCurrentPrice()));
+            setCellIfChanged(i, 3, p.getStatus());
+        }
+    }
+
+    private void setCellIfChanged(int row, int column, Object value) {
+        Object current = tableModel.getValueAt(row, column);
+        if (current == null ? value != null : !current.equals(value)) {
+            tableModel.setValueAt(value, row, column);
+        }
+    }
+
+    /** 상품이 추가/삭제되거나 필터가 바뀌어 행 구성 자체가 달라졌을 때만 전체를 다시 그린다. */
+    private void rebuildRows() {
         Icon dummyIcon = UIManager.getIcon("FileView.fileIcon");
         tableModel.setRowCount(0);
         for (Product p : displayedProducts) {
             Icon icon = loadThumbnail(p.getImagePath(), dummyIcon);
             tableModel.addRow(new Object[]{icon, p.getTitle(), formatPrice(p.getCurrentPrice()), p.getStatus()});
         }
+    }
 
-        selectedProduct = null;
-        int restoreRow = -1;
-        if (previousSelectedId != null) {
-            for (int i = 0; i < displayedProducts.size(); i++) {
-                if (previousSelectedId.equals(displayedProducts.get(i).getProductId())) {
-                    restoreRow = i;
-                    break;
-                }
+    private int indexOfProduct(String productId) {
+        if (productId == null) {
+            return -1;
+        }
+        for (int i = 0; i < displayedProducts.size(); i++) {
+            if (productId.equals(displayedProducts.get(i).getProductId())) {
+                return i;
             }
         }
-
-        if (restoreRow >= 0) {
-            table.setRowSelectionInterval(restoreRow, restoreRow);
-            selectedProduct = displayedProducts.get(restoreRow);
-            updateDetailPanel(selectedProduct);
-        } else {
-            splitPane.setRightComponent(null);
-            splitPane.setDividerSize(0);
-        }
+        return -1;
     }
 
     /**
