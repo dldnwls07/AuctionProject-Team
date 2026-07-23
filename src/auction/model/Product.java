@@ -110,8 +110,12 @@ public class Product {
         this.currentPrice = currentPrice;
     }
 
-    public String getcurrentBidder() {
+    public String getCurrentBidder() {
         return currentBidder;
+    }
+
+    public String getcurrentBidder() {
+        return getCurrentBidder();
     }
 
     public void setCurrentBidder(String currentBidder) {

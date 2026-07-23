@@ -7,7 +7,7 @@ public class Bid {
 
     private int bidId; // 각 입찰 기록마다 부여되는 고유 입찰 식별 번호
 
-    private int productId; // 입찰을 진행한 경매 대상 상품의 고유 ID 번호
+    private String productId; // 입찰을 진행한 경매 대상 상품의 고유 ID 문자열 (Product.productId와 매핑)
 
     private String bidderName; // 입찰을 수행한 사용자의 이름 문자열
 
@@ -15,7 +15,7 @@ public class Bid {
 
     private String bidTime; // 입찰이 발생한 시각 문자열
 
-    public Bid(int bidId, int productId, String bidderName, int bidPrice, String bidTime) {
+    public Bid(int bidId, String productId, String bidderName, int bidPrice, String bidTime) {
         this.bidId = bidId;
         this.productId = productId;
         this.bidderName = bidderName;
@@ -31,11 +31,11 @@ public class Bid {
         this.bidId = bidId;
     }
 
-    public int getProductId() {
+    public String getProductId() {
         return productId;
     }
 
-    public void setProductId(int productId) {
+    public void setProductId(String productId) {
         this.productId = productId;
     }
 

@@ -17,7 +17,7 @@ public class bidFromCsvString {
             }
 
             int bidId = Integer.parseInt(values[0].trim());
-            int productId = Integer.parseInt(values[1].trim());
+            String productId = values[1].trim();
             String bidderName = values[2].trim();
             int bidPrice = Integer.parseInt(values[3].trim());
             String bidTime = values[4].trim();

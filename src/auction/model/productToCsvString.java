@@ -5,23 +5,21 @@ package auction.model;
  */
 public class productToCsvString {
 
-    private static String clean(String value) { // 공백처리하는 클래스
-        if (value == null) {
-            return "";
-        }
-        return value.replace(',', ' ').replace('\n', ' ').replace('\r', ' ');
-    }
-
     public static String convert(Product product) {
         if (product == null) {
             return "";
         }
-        // 공백처리한거끼리 이어 붙이기
-        return product.getProductId() + "," + clean(product.getSellerName()) + "," + clean(product.getTitle()) + ","
-                + clean(product.getDescription()) + "," + product.getStartPrice() + "," + product.getCurrentPrice()
-                + ","
-                + clean(product.getcurrentBidder()) + "," + clean(product.getImagePath()) + ","
-                + clean(product.getAuctionStartTime()) + "," + clean(product.getAuctionEndTime()) + ","
-                + clean(product.getLastBidTime()) + "," + clean(product.getStatus());
+        return clean.cleanValue(product.getProductId()) + ","
+                + clean.cleanValue(product.getSellerName()) + ","
+                + clean.cleanValue(product.getTitle()) + ","
+                + clean.cleanValue(product.getDescription()) + ","
+                + product.getStartPrice() + ","
+                + product.getCurrentPrice() + ","
+                + clean.cleanValue(product.getCurrentBidder()) + ","
+                + clean.cleanValue(product.getImagePath()) + ","
+                + clean.cleanValue(product.getAuctionStartTime()) + ","
+                + clean.cleanValue(product.getAuctionEndTime()) + ","
+                + clean.cleanValue(product.getLastBidTime()) + ","
+                + clean.cleanValue(product.getStatus());
     }
 }
